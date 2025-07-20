@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qtrl-pro-trading:1.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - ALPACA_API_KEY=${ALPACA_API_KEY}
+      - ALPACA_API_SECRET=${ALPACA_API_SECRET}
+      - ALPACA_BASE_URL=https://paper-api.alpaca.markets
+    depends_on:
+      - mlflow
+      - alpaca-data-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - ./app:/app
+      - .:/app/src:ro
+    restart: unless-stopped
+
+  mlflow:
+    image: python:3.11.9-slim
+    command: >
+      bash -c "pip install mlflow==2.14.3 && 
+               mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlflow/artifacts"
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+      - ./mlflow.db:/mlflow.db
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  alpaca-data-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qtrl-pro-trading:1.0.0
+    command: python alpaca_data_service.py
+    environment:
+      - ALPACA_API_KEY=${ALPACA_API_KEY}
+      - ALPACA_API_SECRET=${ALPACA_API_SECRET}
+      - ALPACA_BASE_URL=https://paper-api.alpaca.markets
+    volumes:
+      - ./app:/app
+      - .:/app/src:ro
+    restart: unless-stopped
+
+volumes:
+  mlflow-data:
+    name: mlflow-data
