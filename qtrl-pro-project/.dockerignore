@@ -1,4 +1,0 @@
-mlruns/
-app/
-mlflow.db
-.env
